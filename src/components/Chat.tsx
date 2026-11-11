@@ -487,6 +487,34 @@ const STAGE_ICONS: Record<string, ProgressIconComponent[]> = {
   compose: [Brain, PenLine, Sparkles],
 };
 
+function ProgressText({ text }: { text: string }) {
+  const [swap, setSwap] = useState({ current: text, previous: text });
+
+  // Adjust during render so the outgoing line can cross-fade with the new one.
+  if (swap.current !== text) {
+    setSwap({ current: text, previous: swap.current });
+  }
+
+  const hasPrevious = swap.previous !== swap.current;
+
+  return (
+    <span className="progress-swap">
+      {hasPrevious && (
+        <span
+          key={`out-${swap.previous}`}
+          className="progress-text is-leaving"
+          aria-hidden
+        >
+          {swap.previous}
+        </span>
+      )}
+      <span key={`in-${swap.current}`} className="progress-text is-entering">
+        {swap.current}
+      </span>
+    </span>
+  );
+}
+
 function ProgressMessage({ parts }: { parts: UIParts }) {
   const [tick, setTick] = useState(0);
 
@@ -538,12 +566,14 @@ function ProgressMessage({ parts }: { parts: UIParts }) {
 
   useEffect(() => {
     const interval = window.setInterval(() => {
-      setTick((current) => current + 1);
-    }, 2200);
+      if (document.visibilityState === "visible") {
+        setTick((current) => current + 1);
+      }
+    }, 1500);
     return () => window.clearInterval(interval);
   }, []);
 
-  const isSlow = tick >= 4;
+  const isSlow = tick >= 5;
   const message = isSlow
     ? "این مرحله کمی زمان می‌برد؛ هنوز در حال پردازش هستم"
     : messages[tick % messages.length].replace(/…$/, "");
@@ -558,7 +588,7 @@ function ProgressMessage({ parts }: { parts: UIParts }) {
 
   const stageIcons = STAGE_ICONS[stage];
   const Icon = stageIcons[tick % stageIcons.length];
-  const seconds = Math.round(tick * 2.2);
+  const seconds = Math.round(tick * 1.5);
 
   return (
     <div className="answer-waiting">
@@ -573,9 +603,7 @@ function ProgressMessage({ parts }: { parts: UIParts }) {
           <Icon size={10} strokeWidth={2.4} className="progress-orb-icon" />
         </span>
         <span className="progress-copy">
-          <span key={message} className="progress-text">
-            {message}
-          </span>
+          <ProgressText text={message} />
         </span>
         {tick >= 2 && (
           <span className="progress-elapsed num-fa" aria-hidden>
@@ -743,6 +771,7 @@ export default function Chat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const scrollRafRef = useRef<number | null>(null);
 
   const online = useOnline();
   const { theme, toggle } = useTheme();
@@ -758,8 +787,22 @@ export default function Chat() {
   }, [input]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (scrollRafRef.current !== null) return;
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = null;
+      const el = chatScrollRef.current;
+      if (!el) return;
+      el.scrollTop = el.scrollHeight;
+    });
   }, [messages, status]);
+
+  useEffect(() => {
+    return () => {
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const handleWheel = (event: WheelEvent) => {
