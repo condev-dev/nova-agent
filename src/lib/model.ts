@@ -1,4 +1,4 @@
-export const MODEL_ID = process.env.MODEL_ID!;
+export const MODEL_ID = process.env.MODEL_ID || "gemini-2.5-flash";
 
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 
