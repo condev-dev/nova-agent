@@ -5,7 +5,7 @@ It answers customer inquiries about shipping, returns, warranties, sizing, and p
 
 > ⚡ **Portfolio-Level AI Project** – Showcasing senior-level work in **RAG pipeline design, embedding chunking strategies, Persian RTL interface architecture, agentic tool calling, and evaluation harnesses**.
 
-[![Live Demo](https://img.shields.io/badge/Live_Demo-Coming_Soon-3f3fd5?style=for-the-badge&logo=vercel&logoColor=white)](#)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Visit_Site-3f3fd5?style=for-the-badge&logo=vercel&logoColor=white)](https://nova-agent-omega.vercel.app/)
 
 ---
 
@@ -76,7 +76,7 @@ It answers customer inquiries about shipping, returns, warranties, sizing, and p
 
 ### 🔗 Live Demo
 
-**[Live Demo — Link Coming Soon](#)**
+**[nova-agent-omega.vercel.app](https://nova-agent-omega.vercel.app/)**
 
 </div>
 
