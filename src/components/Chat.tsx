@@ -90,116 +90,42 @@ function formatSourceTitle(source: string): string {
   return (canonicalKey && SOURCE_TITLES[canonicalKey]) || source;
 }
 
-function renderWithCitations(
-  text: string,
-  sources: string[] = [],
-): ReactNode[] {
-  const parts: ReactNode[] = [];
-  const re = /\[([0-9۰-۹a-zA-Z_\-.,\s\u0600-\u06FF]+)\]/g;
-  let last = 0;
-  let m: RegExpExecArray | null;
-  let key = 0;
-
-  while ((m = re.exec(text)) !== null) {
-    if (m.index > last) parts.push(text.slice(last, m.index));
-
-    const inner = m[1].trim();
-    const rawTokens = inner.split(/[,،]/).map((t) => t.trim()).filter(Boolean);
-
-    if (rawTokens.length === 0) {
-      parts.push(m[0]);
-      last = m.index + m[0].length;
-      continue;
-    }
-
-    let allMatched = true;
-    const badgeNodes: ReactNode[] = [];
-
-    for (const token of rawTokens) {
-      const isNumeric = /^[0-9۰-۹]{1,2}$/.test(token);
-
-      if (isNumeric) {
-        const raw = token.replace(/[۰-۹]/g, (c) =>
-          String(c.charCodeAt(0) - 0x06f0),
-        );
-        const n = Number(raw);
-        const fa = toFaDigits(n);
-        const title = sources[n - 1] ? formatSourceTitle(sources[n - 1]) : "";
-        badgeNodes.push(
-          <span
-            key={`c-${key++}-${m.index}-${n}`}
-            className="cite"
-            title={title ? `منبع ${fa}: ${title}` : `منبع ${fa}`}
-            aria-label={title ? `منبع ${fa}: ${title}` : `منبع ${fa}`}
-          >
-            {fa}
-          </span>,
-        );
-      } else {
-        const normalizedKey = token.toLowerCase().replace(/\.md$/i, "");
-        const isKnownKey =
-          normalizedKey in SOURCE_TITLES || token in PERSIAN_SOURCE_MAP;
-
-        let idx = sources.findIndex(
-          (s) =>
-            s.toLowerCase().replace(/\.md$/i, "") === normalizedKey ||
-            formatSourceTitle(s) === formatSourceTitle(token),
-        );
-
-        if (idx === -1 && isKnownKey) {
-          idx = sources.length;
-          sources.push(token);
-        }
-
-        if (idx !== -1) {
-          const fa = toFaDigits(idx + 1);
-          const title = formatSourceTitle(token);
-          badgeNodes.push(
-            <span
-              key={`c-${key++}-${m.index}-${token}`}
-              className="cite"
-              title={`منبع ${fa}: ${title}`}
-              aria-label={`منبع ${fa}: ${title}`}
-            >
-              {fa}
-            </span>,
-          );
-        } else {
-          allMatched = false;
-        }
-      }
-    }
-
-    if (allMatched && badgeNodes.length > 0) {
-      parts.push(...badgeNodes);
-    } else {
-      parts.push(m[0]);
-    }
-
-    last = m.index + m[0].length;
-  }
-
-  if (last < text.length) parts.push(text.slice(last));
-  return parts;
+function isCitationToken(token: string): boolean {
+  const normalized = token.trim().toLowerCase().replace(/\.md$/i, "");
+  return (
+    /^[0-9۰-۹]{1,2}$/.test(normalized) ||
+    normalized in SOURCE_TITLES ||
+    token.trim() in PERSIAN_SOURCE_MAP
+  );
 }
 
-function processNodeWithCitations(
-  node: ReactNode,
-  sources: string[] = [],
-): ReactNode {
+function renderWithCitations(text: string): ReactNode[] {
+  const re = /\[([0-9۰-۹a-zA-Z_\-.,\s\u0600-\u06FF]+)\](?!\()/g;
+  const cleaned = text.replace(re, (full, inner: string) => {
+    const tokens = inner
+      .split(/[,،]/)
+      .map((token) => token.trim())
+      .filter(Boolean);
+    return tokens.length > 0 && tokens.every(isCitationToken) ? "" : full;
+  });
+
+  return [cleaned.replace(/[ \t]{2,}/g, " ")];
+}
+
+function processNodeWithCitations(node: ReactNode): ReactNode {
   if (typeof node === "string") {
-    return renderWithCitations(node, sources);
+    return renderWithCitations(node);
   }
   if (Array.isArray(node)) {
     return node.map((child, i) => (
-      <span key={i}>{processNodeWithCitations(child, sources)}</span>
+      <span key={i}>{processNodeWithCitations(child)}</span>
     ));
   }
   if (node && typeof node === "object" && "props" in node) {
     const el = node as ReactElement<{ children?: ReactNode }>;
     if (el.props?.children) {
       return cloneElement(el, {
-        children: processNodeWithCitations(el.props.children, sources),
+        children: processNodeWithCitations(el.props.children),
       });
     }
   }
@@ -432,13 +358,13 @@ function CodeBlock({ children }: { children: string }) {
   );
 }
 
-function createMarkdownComponents(sources: string[]): Components {
+function createMarkdownComponents(): Components {
   return {
     p({ children }) {
-      return <p dir="auto">{processNodeWithCitations(children, sources)}</p>;
+      return <p dir="auto">{processNodeWithCitations(children)}</p>;
     },
     li({ children }) {
-      return <li dir="auto">{processNodeWithCitations(children, sources)}</li>;
+      return <li dir="auto">{processNodeWithCitations(children)}</li>;
     },
     h1({ children }) {
       return <h1 dir="auto">{children}</h1>;
@@ -482,7 +408,7 @@ function createMarkdownComponents(sources: string[]): Components {
             ? { target: "_blank", rel: "noopener noreferrer" }
             : {})}
         >
-          {processNodeWithCitations(children, sources)}
+          {processNodeWithCitations(children)}
           {external && (
             <ExternalLink
               size={12}
@@ -559,10 +485,7 @@ function Message({
 
   const text = useMemo(() => extractText(parts), [parts]);
   const sources = useMemo(() => (isUser ? [] : extractSources(parts)), [parts, isUser]);
-  const markdownComponents = useMemo(
-    () => createMarkdownComponents(sources),
-    [sources],
-  );
+  const markdownComponents = useMemo(() => createMarkdownComponents(), []);
 
   const onCopy = useCallback(async () => {
     const ok = await copyText(text);
