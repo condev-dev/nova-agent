@@ -121,7 +121,6 @@ body {
   .icon-btn,
   .btn-send,
   .btn-stop,
-  .fab,
   .code-copy,
   .toast-inner,
   .suggest-card .cat,
@@ -144,7 +143,6 @@ body {
   .icon-btn,
   .btn-send,
   .btn-stop,
-  .fab,
   .code-copy {
     box-sizing: border-box;
     padding-block-start: 1px;
@@ -883,35 +881,6 @@ body {
   text-align: center;
   font-size: var(--text-xs);
   border-block-end: 1px solid color-mix(in oklab, var(--danger) 30%, transparent);
-}
-
-.fab-wrap {
-  position: sticky;
-  bottom: var(--sp-3);
-  inset-inline-end: 0;
-  display: flex;
-  justify-content: center;
-  pointer-events: none;
-  margin-block-start: calc(-1 * var(--sp-10));
-  height: 0;
-}
-.fab {
-  pointer-events: auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--fg-muted);
-  border: 1px solid var(--border);
-  cursor: pointer;
-  transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease, opacity 0.2s ease;
-}
-.fab:hover {
-  color: var(--fg);
-  background: var(--surface-2);
 }
 
 .composer-wrap {
