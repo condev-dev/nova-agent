@@ -564,7 +564,7 @@ export default function Chat() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const stickToBottomRef = useRef(true);
-  const lastScrollTopRef = useRef(0);
+  const userScrolledUpRef = useRef(false);
 
   const online = useOnline();
   const { theme, toggle } = useTheme();
@@ -579,30 +579,61 @@ export default function Chat() {
     ta.style.height = Math.min(ta.scrollHeight, 180) + "px";
   }, [input]);
 
+  const scrollToBottom = useCallback((smooth = false) => {
+    stickToBottomRef.current = true;
+    userScrolledUpRef.current = false;
+    const el = scrollRef.current;
+    if (!el) return;
+    if (smooth) {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    } else {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, []);
+
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
+
     const onScroll = () => {
-      const top = el.scrollTop;
-      const distance = el.scrollHeight - top - el.clientHeight;
-      if (distance <= 80) {
+      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (distance <= 40) {
         stickToBottomRef.current = true;
-      } else if (top < lastScrollTopRef.current - 4) {
+        userScrolledUpRef.current = false;
+      } else if (distance > 120) {
         stickToBottomRef.current = false;
+        userScrolledUpRef.current = true;
       }
-      lastScrollTopRef.current = top;
       setShowFab(distance > 240);
     };
+
     el.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
     return () => el.removeEventListener("scroll", onScroll);
   }, []);
 
   useEffect(() => {
-    if (!stickToBottomRef.current) return;
     const el = scrollRef.current;
     if (!el) return;
-    el.scrollTop = el.scrollHeight;
+    if (typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver(() => {
+      if (!userScrolledUpRef.current && stickToBottomRef.current) {
+        el.scrollTop = el.scrollHeight;
+      }
+    });
+
+    observer.observe(el);
+    if (el.firstElementChild) observer.observe(el.firstElementChild);
+
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!userScrolledUpRef.current) {
+      stickToBottomRef.current = true;
+      const el = scrollRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    }
   }, [messages, status]);
 
   useEffect(() => {
@@ -617,14 +648,13 @@ export default function Chat() {
       if (!t || busy) return;
       sendMessage({ text: t });
       setInput("");
-      stickToBottomRef.current = true;
+      scrollToBottom(false);
       requestAnimationFrame(() => {
-        const el = scrollRef.current;
-        if (el) el.scrollTop = el.scrollHeight;
+        scrollToBottom(false);
         textareaRef.current?.focus();
       });
     },
-    [busy, sendMessage],
+    [busy, sendMessage, scrollToBottom],
   );
 
   const onKeyDown = useCallback(
@@ -643,6 +673,7 @@ export default function Chat() {
     setMessages([]);
     setInput("");
     stickToBottomRef.current = true;
+    userScrolledUpRef.current = false;
     requestAnimationFrame(() => {
       const el = scrollRef.current;
       if (el) el.scrollTop = 0;
@@ -651,15 +682,14 @@ export default function Chat() {
   }, [busy, stop, setMessages]);
 
   const onRetry = useCallback(() => {
+    userScrolledUpRef.current = false;
+    stickToBottomRef.current = true;
     regenerate();
   }, [regenerate]);
 
-  const scrollToBottom = useCallback(() => {
-    stickToBottomRef.current = true;
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, []);
+  const onFabClick = useCallback(() => {
+    scrollToBottom(true);
+  }, [scrollToBottom]);
 
   const charCount = input.length;
   const nearLimit = charCount > CHAR_LIMIT * 0.9;
@@ -764,7 +794,7 @@ export default function Chat() {
             <button
               type="button"
               className="fab"
-              onClick={scrollToBottom}
+              onClick={onFabClick}
               aria-label="رفتن به پایین"
               title="رفتن به پایین"
             >
