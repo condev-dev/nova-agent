@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "نوا — دستیار اسناد",
+  title: "نوا — دستیار هوشمند فروشگاه",
   description:
     "دستیار هوشمند فروشگاه نوا؛ به سوال‌های شما درباره ارسال، مرجوعی، گارانتی و سایزبندی از روی اسناد رسمی پاسخ می‌دهد",
   applicationName: "نوا",
@@ -39,7 +39,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body className="min-h-dvh">{children}</body>
+      <body className="h-full overflow-hidden">{children}</body>
     </html>
   );
 }

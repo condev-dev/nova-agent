@@ -2,7 +2,9 @@
 
 import { useChat } from "@ai-sdk/react";
 import {
+  cloneElement,
   KeyboardEvent as ReactKeyboardEvent,
+  ReactElement,
   ReactNode,
   useCallback,
   useEffect,
@@ -55,29 +57,153 @@ function isExternal(href: string): boolean {
   return /^https?:\/\//i.test(href);
 }
 
-function renderWithCitations(text: string): ReactNode[] {
+const SOURCE_TITLES: Record<string, string> = {
+  company: "درباره ما",
+  shipping: "ارسال و تحویل",
+  returns: "بازگشت کالا و تعویض",
+  warranty: "گارانتی و تعمیرات",
+  payment: "پرداخت و تخفیف",
+  sizing: "سایزبندی و نگهداری",
+  faq: "سؤال‌های پرتکرار",
+};
+
+const PERSIAN_SOURCE_MAP: Record<string, string> = {
+  "درباره ما": "company",
+  "ارسال و تحویل": "shipping",
+  "ارسال": "shipping",
+  "بازگشت کالا و تعویض": "returns",
+  "بازگشت کالا": "returns",
+  "مرجوعی": "returns",
+  "گارانتی و تعمیرات": "warranty",
+  "گارانتی": "warranty",
+  "پرداخت و تخفیف": "payment",
+  "پرداخت": "payment",
+  "سایزبندی و نگهداری": "sizing",
+  "سایزبندی": "sizing",
+  "سؤال‌های پرتکرار": "faq",
+  "سوالات متداول": "faq",
+};
+
+function formatSourceTitle(source: string): string {
+  const key = source.trim().toLowerCase().replace(/\.md$/i, "");
+  const canonicalKey = SOURCE_TITLES[key] ? key : PERSIAN_SOURCE_MAP[key];
+  return (canonicalKey && SOURCE_TITLES[canonicalKey]) || source;
+}
+
+function renderWithCitations(
+  text: string,
+  sources: string[] = [],
+): ReactNode[] {
   const parts: ReactNode[] = [];
-  const re = /\[([0-9۰-۹]{1,2})\]/g;
+  const re = /\[([0-9۰-۹a-zA-Z_\-.,\s\u0600-\u06FF]+)\]/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let key = 0;
+
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) parts.push(text.slice(last, m.index));
 
-    const raw = m[1].replace(/[۰-۹]/g, (c) =>
-      String(c.charCodeAt(0) - 0x06f0),
-    );
-    const n = Number(raw);
-    const fa = toFaDigits(n);
-    parts.push(
-      <span key={`c-${key++}-${m.index}`} className="cite" aria-label={`منبع ${fa}`}>
-        {fa}
-      </span>,
-    );
+    const inner = m[1].trim();
+    const rawTokens = inner.split(/[,،]/).map((t) => t.trim()).filter(Boolean);
+
+    if (rawTokens.length === 0) {
+      parts.push(m[0]);
+      last = m.index + m[0].length;
+      continue;
+    }
+
+    let allMatched = true;
+    const badgeNodes: ReactNode[] = [];
+
+    for (const token of rawTokens) {
+      const isNumeric = /^[0-9۰-۹]{1,2}$/.test(token);
+
+      if (isNumeric) {
+        const raw = token.replace(/[۰-۹]/g, (c) =>
+          String(c.charCodeAt(0) - 0x06f0),
+        );
+        const n = Number(raw);
+        const fa = toFaDigits(n);
+        const title = sources[n - 1] ? formatSourceTitle(sources[n - 1]) : "";
+        badgeNodes.push(
+          <span
+            key={`c-${key++}-${m.index}-${n}`}
+            className="cite"
+            title={title ? `منبع ${fa}: ${title}` : `منبع ${fa}`}
+            aria-label={title ? `منبع ${fa}: ${title}` : `منبع ${fa}`}
+          >
+            {fa}
+          </span>,
+        );
+      } else {
+        const normalizedKey = token.toLowerCase().replace(/\.md$/i, "");
+        const isKnownKey =
+          normalizedKey in SOURCE_TITLES || token in PERSIAN_SOURCE_MAP;
+
+        let idx = sources.findIndex(
+          (s) =>
+            s.toLowerCase().replace(/\.md$/i, "") === normalizedKey ||
+            formatSourceTitle(s) === formatSourceTitle(token),
+        );
+
+        if (idx === -1 && isKnownKey) {
+          idx = sources.length;
+          sources.push(token);
+        }
+
+        if (idx !== -1) {
+          const fa = toFaDigits(idx + 1);
+          const title = formatSourceTitle(token);
+          badgeNodes.push(
+            <span
+              key={`c-${key++}-${m.index}-${token}`}
+              className="cite"
+              title={`منبع ${fa}: ${title}`}
+              aria-label={`منبع ${fa}: ${title}`}
+            >
+              {fa}
+            </span>,
+          );
+        } else {
+          allMatched = false;
+        }
+      }
+    }
+
+    if (allMatched && badgeNodes.length > 0) {
+      parts.push(...badgeNodes);
+    } else {
+      parts.push(m[0]);
+    }
+
     last = m.index + m[0].length;
   }
+
   if (last < text.length) parts.push(text.slice(last));
   return parts;
+}
+
+function processNodeWithCitations(
+  node: ReactNode,
+  sources: string[] = [],
+): ReactNode {
+  if (typeof node === "string") {
+    return renderWithCitations(node, sources);
+  }
+  if (Array.isArray(node)) {
+    return node.map((child, i) => (
+      <span key={i}>{processNodeWithCitations(child, sources)}</span>
+    ));
+  }
+  if (node && typeof node === "object" && "props" in node) {
+    const el = node as ReactElement<{ children?: ReactNode }>;
+    if (el.props?.children) {
+      return cloneElement(el, {
+        children: processNodeWithCitations(el.props.children, sources),
+      });
+    }
+  }
+  return node;
 }
 
 type ToolPart = {
@@ -215,7 +341,7 @@ function Header({
       <div className="app-header-inner">
         <div className="brand">
           <span className="brand-mark" role="img" aria-label={BRAND} />
-          <span className="brand-tag">دستیار اسناد</span>
+          <span className="brand-tag">فروشگاه نوا</span>
         </div>
         <div className="ms-auto flex items-center gap-1">
           <button
@@ -306,96 +432,88 @@ function CodeBlock({ children }: { children: string }) {
   );
 }
 
-const MD_COMPONENTS: Components = {
-  p({ children }) {
-    return (
-      <p dir="auto">
-        {typeof children === "string" ? renderWithCitations(children) : children}
-      </p>
-    );
-  },
-  li({ children }) {
-    return (
-      <li dir="auto">
-        {typeof children === "string" ? renderWithCitations(children) : children}
-      </li>
-    );
-  },
-  h1({ children }) {
-    return <h1 dir="auto">{children}</h1>;
-  },
-  h2({ children }) {
-    return <h2 dir="auto">{children}</h2>;
-  },
-  h3({ children }) {
-    return <h3 dir="auto">{children}</h3>;
-  },
-  h4({ children }) {
-    return <h4 dir="auto">{children}</h4>;
-  },
-  blockquote({ children }) {
-    return <blockquote dir="auto">{children}</blockquote>;
-  },
-  table({ children }) {
-    return (
-      <div className="table-scroll scroll-area">
-        <table>{children}</table>
-      </div>
-    );
-  },
-  th({ children }) {
-    return <th dir="auto">{children}</th>;
-  },
-  td({ children }) {
-    return <td dir="auto">{children}</td>;
-  },
-  a({ href, children }) {
-    const url = href ?? "";
-    if (!isSafeHref(url)) {
-
-      return <span>{children}</span>;
-    }
-    const external = isExternal(url);
-    return (
-      <a
-        href={url}
-        className="link ltr-iso"
-        {...(external
-          ? { target: "_blank", rel: "noopener noreferrer" }
-          : {})}
-      >
-        {children}
-        {external && (
-          <ExternalLink
-            size={12}
-            className="ext-icon"
-            aria-label="لینک خارجی"
-          />
-        )}
-      </a>
-    );
-  },
-  code(props) {
-    const { inline, className, children } = props as {
-      inline?: boolean;
-      className?: string;
-      children?: ReactNode;
-    };
-    const text = String(children ?? "").replace(/\n$/, "");
-    if (inline) {
+function createMarkdownComponents(sources: string[]): Components {
+  return {
+    p({ children }) {
+      return <p dir="auto">{processNodeWithCitations(children, sources)}</p>;
+    },
+    li({ children }) {
+      return <li dir="auto">{processNodeWithCitations(children, sources)}</li>;
+    },
+    h1({ children }) {
+      return <h1 dir="auto">{children}</h1>;
+    },
+    h2({ children }) {
+      return <h2 dir="auto">{children}</h2>;
+    },
+    h3({ children }) {
+      return <h3 dir="auto">{children}</h3>;
+    },
+    h4({ children }) {
+      return <h4 dir="auto">{children}</h4>;
+    },
+    blockquote({ children }) {
+      return <blockquote dir="auto">{children}</blockquote>;
+    },
+    table({ children }) {
       return (
-        <code dir="ltr" className={className}>
-          {text}
-        </code>
+        <div className="table-scroll scroll-area">
+          <table>{children}</table>
+        </div>
       );
-    }
-    return <CodeBlock>{text}</CodeBlock>;
-  },
-  pre({ children }) {
-
-    return <>{children}</>;
-  },
-};
+    },
+    th({ children }) {
+      return <th dir="auto">{children}</th>;
+    },
+    td({ children }) {
+      return <td dir="auto">{children}</td>;
+    },
+    a({ href, children }) {
+      const url = href ?? "";
+      if (!isSafeHref(url)) {
+        return <span>{children}</span>;
+      }
+      const external = isExternal(url);
+      return (
+        <a
+          href={url}
+          className="link ltr-iso"
+          {...(external
+            ? { target: "_blank", rel: "noopener noreferrer" }
+            : {})}
+        >
+          {processNodeWithCitations(children, sources)}
+          {external && (
+            <ExternalLink
+              size={12}
+              className="ext-icon"
+              aria-label="لینک خارجی"
+            />
+          )}
+        </a>
+      );
+    },
+    code(props) {
+      const { inline, className, children } = props as {
+        inline?: boolean;
+        className?: string;
+        children?: ReactNode;
+      };
+      const text = String(children ?? "").replace(/\n$/, "");
+      if (inline) {
+        return (
+          <code dir="ltr" className={className}>
+            {text}
+          </code>
+        );
+      }
+      return <CodeBlock>{text}</CodeBlock>;
+    },
+    pre({ children }) {
+      return <>{children}</>;
+    },
+  };
+}
 
 const TOOL_LABEL: Record<string, string> = {
   "tool-search_knowledge": "جست‌وجو در اسناد",
@@ -441,6 +559,10 @@ function Message({
 
   const text = useMemo(() => extractText(parts), [parts]);
   const sources = useMemo(() => (isUser ? [] : extractSources(parts)), [parts, isUser]);
+  const markdownComponents = useMemo(
+    () => createMarkdownComponents(sources),
+    [sources],
+  );
 
   const onCopy = useCallback(async () => {
     const ok = await copyText(text);
@@ -479,7 +601,7 @@ function Message({
                   <ReactMarkdown
 
                     remarkPlugins={[remarkGfm]}
-                    components={MD_COMPONENTS}
+                    components={markdownComponents}
                     skipHtml
                   >
                     {part.text}
@@ -494,10 +616,14 @@ function Message({
         {!isUser && sources.length > 0 && (
           <div className="sources" aria-label="منابع">
             {sources.map((s, i) => (
-              <span key={s} className="source-chip">
-                <span className="n num-fa">{toFaDigits(i + 1)}</span>
-                <span dir="auto">{s}</span>
-              </span>
+                <span
+                  key={s}
+                  className="source-chip"
+                  title={`منبع ${toFaDigits(i + 1)}: ${formatSourceTitle(s)}`}
+                >
+                  <span className="n num-fa">{toFaDigits(i + 1)}</span>
+                  <span dir="auto">{formatSourceTitle(s)}</span>
+                </span>
             ))}
           </div>
         )}
@@ -560,6 +686,7 @@ export default function Chat() {
   const [toast, setToast] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const online = useOnline();
@@ -578,6 +705,30 @@ export default function Chat() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, status]);
+
+  useEffect(() => {
+    const handleWheel = (event: WheelEvent) => {
+      const scrollElement = chatScrollRef.current;
+      if (!scrollElement || event.ctrlKey) return;
+
+      const canScroll = scrollElement.scrollHeight > scrollElement.clientHeight;
+      if (!canScroll) return;
+
+      const atTop = scrollElement.scrollTop <= 0;
+      const atBottom =
+        scrollElement.scrollTop + scrollElement.clientHeight >=
+        scrollElement.scrollHeight - 1;
+      const movingUp = event.deltaY < 0;
+      const movingDown = event.deltaY > 0;
+
+      if ((movingUp && atTop) || (movingDown && atBottom)) return;
+      event.preventDefault();
+      scrollElement.scrollBy({ top: event.deltaY, behavior: "auto" });
+    };
+
+    window.addEventListener("wheel", handleWheel, { passive: false });
+    return () => window.removeEventListener("wheel", handleWheel);
+  }, []);
 
   useEffect(() => {
     if (!toast) return;
@@ -652,7 +803,7 @@ export default function Chat() {
         theme={theme}
       />
 
-      <div className="chat-scroll scroll-area">
+      <div ref={chatScrollRef} className="chat-scroll scroll-area">
         <div className="chat-inner">
           {isEmpty ? (
             <Welcome onPick={send} disabled={busy || !online} />
