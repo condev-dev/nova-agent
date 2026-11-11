@@ -14,7 +14,6 @@ import {
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
-  ArrowDown,
   ArrowUp,
   Check,
   Copy,
@@ -558,13 +557,10 @@ export default function Chat() {
   const { messages, sendMessage, status, error, stop, setMessages, regenerate } =
     useChat();
   const [input, setInput] = useState("");
-  const [showFab, setShowFab] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const stickToBottomRef = useRef(true);
-  const userScrolledUpRef = useRef(false);
 
   const online = useOnline();
   const { theme, toggle } = useTheme();
@@ -579,61 +575,8 @@ export default function Chat() {
     ta.style.height = Math.min(ta.scrollHeight, 180) + "px";
   }, [input]);
 
-  const scrollToBottom = useCallback((smooth = false) => {
-    stickToBottomRef.current = true;
-    userScrolledUpRef.current = false;
-    const el = scrollRef.current;
-    if (!el) return;
-    if (smooth) {
-      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-    } else {
-      el.scrollTop = el.scrollHeight;
-    }
-  }, []);
-
   useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-
-    const onScroll = () => {
-      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-      if (distance <= 40) {
-        stickToBottomRef.current = true;
-        userScrolledUpRef.current = false;
-      } else if (distance > 120) {
-        stickToBottomRef.current = false;
-        userScrolledUpRef.current = true;
-      }
-      setShowFab(distance > 240);
-    };
-
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
-  }, []);
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    if (typeof ResizeObserver === "undefined") return;
-
-    const observer = new ResizeObserver(() => {
-      if (!userScrolledUpRef.current && stickToBottomRef.current) {
-        el.scrollTop = el.scrollHeight;
-      }
-    });
-
-    observer.observe(el);
-    if (el.firstElementChild) observer.observe(el.firstElementChild);
-
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    if (!userScrolledUpRef.current) {
-      stickToBottomRef.current = true;
-      const el = scrollRef.current;
-      if (el) el.scrollTop = el.scrollHeight;
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, status]);
 
   useEffect(() => {
@@ -648,13 +591,12 @@ export default function Chat() {
       if (!t || busy) return;
       sendMessage({ text: t });
       setInput("");
-      scrollToBottom(false);
       requestAnimationFrame(() => {
-        scrollToBottom(false);
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
         textareaRef.current?.focus();
       });
     },
-    [busy, sendMessage, scrollToBottom],
+    [busy, sendMessage],
   );
 
   const onKeyDown = useCallback(
@@ -672,24 +614,12 @@ export default function Chat() {
     if (busy) stop();
     setMessages([]);
     setInput("");
-    stickToBottomRef.current = true;
-    userScrolledUpRef.current = false;
-    requestAnimationFrame(() => {
-      const el = scrollRef.current;
-      if (el) el.scrollTop = 0;
-      textareaRef.current?.focus();
-    });
+    requestAnimationFrame(() => textareaRef.current?.focus());
   }, [busy, stop, setMessages]);
 
   const onRetry = useCallback(() => {
-    userScrolledUpRef.current = false;
-    stickToBottomRef.current = true;
     regenerate();
   }, [regenerate]);
-
-  const onFabClick = useCallback(() => {
-    scrollToBottom(true);
-  }, [scrollToBottom]);
 
   const charCount = input.length;
   const nearLimit = charCount > CHAR_LIMIT * 0.9;
@@ -722,7 +652,7 @@ export default function Chat() {
         theme={theme}
       />
 
-      <div ref={scrollRef} className="chat-scroll scroll-area">
+      <div className="chat-scroll scroll-area">
         <div className="chat-inner">
           {isEmpty ? (
             <Welcome onPick={send} disabled={busy || !online} />
@@ -787,21 +717,9 @@ export default function Chat() {
               )}
             </>
           )}
-        </div>
 
-        {showFab && !isEmpty && (
-          <div className="fab-wrap">
-            <button
-              type="button"
-              className="fab"
-              onClick={onFabClick}
-              aria-label="رفتن به پایین"
-              title="رفتن به پایین"
-            >
-              <ArrowDown size={16} aria-hidden />
-            </button>
-          </div>
-        )}
+          <div ref={messagesEndRef} aria-hidden />
+        </div>
       </div>
 
       <div className="composer-wrap">
