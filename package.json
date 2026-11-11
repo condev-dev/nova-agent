@@ -1,0 +1,40 @@
+{
+  "name": "rag-agent",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "node scripts/run.mjs node_modules/next/dist/bin/next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "ingest": "node scripts/run.mjs node_modules/tsx/dist/cli.mjs --env-file=.env.local scripts/ingest.ts",
+    "eval": "node scripts/run.mjs node_modules/tsx/dist/cli.mjs --env-file=.env.local evals/run.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/google": "^2.0.111",
+    "@ai-sdk/react": "^2.0.292",
+    "@fontsource-variable/vazirmatn": "^5.3.0",
+    "@supabase/supabase-js": "^2.119.0",
+    "@upstash/ratelimit": "^2.2.0",
+    "@upstash/redis": "^1.41.0",
+    "ai": "^5.0.289",
+    "lucide-react": "^1.72.0",
+    "next": "16.4.6",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@tailwindcss/turbopack": "4.3.3",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.6",
+    "tailwindcss": "4.3.3",
+    "tsx": "^4.23.15",
+    "typescript": "^5"
+  }
+}
