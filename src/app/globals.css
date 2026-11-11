@@ -801,6 +801,13 @@ body {
 .tool-chip[data-done="true"] .dot {
   background: var(--accent);
 }
+.tool-chip[data-done="false"] .dot {
+  background: var(--accent);
+  animation: status-pulse 1.4s ease-in-out infinite;
+}
+.tool-chip[data-done="false"] {
+  border-color: color-mix(in oklab, var(--accent) 32%, var(--border));
+}
 .tool-chip .q {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -809,6 +816,161 @@ body {
   color: var(--fg-muted);
 }
 
+.answer-waiting {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding-block-start: var(--sp-1);
+}
+.answer-progress {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-height: 32px;
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+}
+.progress-elapsed {
+  display: inline-flex;
+  align-items: center;
+  height: 1.15rem;
+  padding-inline: 0.45rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--fg-subtle);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  opacity: 0.9;
+  animation: progress-fade 0.3s ease;
+}
+.answer-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-width: 30rem;
+  margin-block-end: var(--sp-1);
+}
+.answer-skeleton span {
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 0%,
+    var(--surface-hover) 45%,
+    var(--surface-2) 90%
+  );
+  background-size: 220% 100%;
+  animation: skeleton-sweep 1.8s ease-in-out infinite;
+}
+.answer-skeleton span:nth-child(2) {
+  animation-delay: 0.25s;
+}
+@keyframes skeleton-sweep {
+  0% {
+    background-position: 120% 0;
+  }
+  100% {
+    background-position: -120% 0;
+  }
+}
+
+/* moving light sweep across the status text */
+.progress-copy {
+  display: inline-flex;
+  align-items: baseline;
+  min-width: 0;
+}
+.progress-text {
+  background-image: linear-gradient(
+    90deg,
+    var(--fg-muted) 0%,
+    var(--fg-muted) 32%,
+    var(--accent) 47%,
+    color-mix(in oklab, var(--accent) 55%, var(--fg-subtle)) 52%,
+    var(--fg-muted) 67%,
+    var(--fg-muted) 100%
+  );
+  background-size: 300% 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: progress-sweep 2.6s linear infinite;
+  will-change: background-position;
+}
+@keyframes progress-sweep {
+  from {
+    background-position: 140% 0;
+  }
+  to {
+    background-position: -140% 0;
+  }
+}
+
+/* indicator: rotating ring + icon that swaps on every status change */
+.progress-orb {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: 0 0 auto;
+  color: var(--accent);
+  animation: progress-orb-in 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.progress-orb-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  border: 1.5px solid color-mix(in oklab, var(--accent) 22%, transparent);
+  border-block-start-color: var(--accent);
+  border-inline-start-color: color-mix(in oklab, var(--accent) 60%, transparent);
+  animation: progress-orb-spin 1.15s linear infinite;
+}
+.progress-orb-icon {
+  position: relative;
+  z-index: 1;
+  animation: progress-orb-icon-in 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.progress-orb[data-stage="connect"] .progress-orb-ring {
+  animation-duration: 1.9s;
+  opacity: 0.65;
+}
+.progress-orb[data-stage="read"] .progress-orb-ring {
+  animation-duration: 1.6s;
+}
+.progress-orb[data-stage="compose"] .progress-orb-ring {
+  animation-duration: 0.85s;
+}
+@keyframes progress-orb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes progress-orb-in {
+  from {
+    transform: scale(0.6);
+    opacity: 0.2;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes progress-orb-icon-in {
+  from {
+    transform: scale(0.4) rotate(-35deg);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
 .thinking {
   display: inline-flex;
   gap: 4px;

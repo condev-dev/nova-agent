@@ -3,6 +3,7 @@
 import { useChat } from "@ai-sdk/react";
 import {
   cloneElement,
+  ComponentType,
   KeyboardEvent as ReactKeyboardEvent,
   ReactElement,
   ReactNode,
@@ -17,12 +18,21 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   ArrowUp,
+  BookOpen,
+  Brain,
   Check,
+  CircleDashed,
   Copy,
   ExternalLink,
+  FileText,
+  LoaderCircle,
+  PenLine,
   MessageSquarePlus,
   Moon,
   RefreshCcw,
+  ScanLine,
+  Search,
+  Sparkles,
   Square,
   Sun,
   ThumbsDown,
@@ -464,6 +474,126 @@ function ToolChip({ part }: { part: ToolPart }) {
   );
 }
 
+type ProgressIconComponent = ComponentType<{
+  size?: number | string;
+  strokeWidth?: number | string;
+  className?: string;
+}>;
+
+const STAGE_ICONS: Record<string, ProgressIconComponent[]> = {
+  connect: [LoaderCircle, CircleDashed, LoaderCircle],
+  search: [Search, ScanLine, Search],
+  read: [BookOpen, FileText, BookOpen],
+  compose: [Brain, PenLine, Sparkles],
+};
+
+function ProgressMessage({ parts }: { parts: UIParts }) {
+  const [tick, setTick] = useState(0);
+
+  const toolParts = useMemo(
+    () =>
+      parts
+        .map((part) => part as ToolPart)
+        .filter((part) => typeof part?.type === "string" && part.type.startsWith("tool-")),
+    [parts],
+  );
+
+  const hasSearch = toolParts.some((part) => part.type === "tool-search_knowledge");
+  const searchDone = toolParts.some(
+    (part) => part.type === "tool-search_knowledge" && part.state === "output-available",
+  );
+  const hasRead = toolParts.some((part) => part.type === "tool-read_document");
+  const readDone = toolParts.some(
+    (part) => part.type === "tool-read_document" && part.state === "output-available",
+  );
+
+  const messages = useMemo(() => {
+    if (!hasSearch) {
+      return [
+        "در حال برقراری ارتباط با دستیار…",
+        "در حال آماده‌سازی جست‌وجو…",
+        "در حال بررسی اسناد مرتبط…",
+      ];
+    }
+    if (!searchDone) {
+      return [
+        "در حال جست‌وجو در اسناد…",
+        "در حال پیدا کردن بخش‌های مرتبط…",
+        "در حال مقایسه نتایج جست‌وجو…",
+      ];
+    }
+    if (hasRead && !readDone) {
+      return [
+        "نتایج پیدا شد؛ در حال خواندن سندهای مرتبط…",
+        "در حال بررسی جزئیات و استثناها…",
+        "در حال استخراج اطلاعات دقیق…",
+      ];
+    }
+    return [
+      "اسناد بررسی شد؛ در حال جمع‌بندی پاسخ…",
+      "در حال تنظیم یک پاسخ دقیق و قابل فهم…",
+      "تقریباً آماده است…",
+    ];
+  }, [hasRead, hasSearch, readDone, searchDone]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setTick((current) => current + 1);
+    }, 2200);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const isSlow = tick >= 4;
+  const message = isSlow
+    ? "این مرحله کمی زمان می‌برد؛ هنوز در حال پردازش هستم"
+    : messages[tick % messages.length].replace(/…$/, "");
+
+  const stage = !hasSearch
+    ? "connect"
+    : !searchDone
+      ? "search"
+      : hasRead && !readDone
+        ? "read"
+        : "compose";
+
+  const stageIcons = STAGE_ICONS[stage];
+  const Icon = stageIcons[tick % stageIcons.length];
+  const seconds = Math.round(tick * 2.2);
+
+  return (
+    <div className="answer-waiting">
+      <div className="answer-progress" role="status" aria-live="polite">
+        <span
+          key={`${stage}-${tick}`}
+          className="progress-orb"
+          data-stage={stage}
+          aria-hidden
+        >
+          <span className="progress-orb-ring" />
+          <Icon size={10} strokeWidth={2.4} className="progress-orb-icon" />
+        </span>
+        <span className="progress-copy">
+          <span key={message} className="progress-text">
+            {message}
+          </span>
+        </span>
+        {tick >= 2 && (
+          <span className="progress-elapsed num-fa" aria-hidden>
+            {toFaDigits(seconds)} ثانیه
+          </span>
+        )}
+      </div>
+
+      {tick >= 1 && (
+        <div className="answer-skeleton" aria-hidden>
+          <span style={{ width: "78%" }} />
+          <span style={{ width: "52%" }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 type UIParts = ReadonlyArray<unknown>;
 
 function Message({
@@ -514,6 +644,8 @@ function Message({
               ))}
           </div>
         )}
+
+        {!isUser && busy && !text && <ProgressMessage parts={parts} />}
 
         <div className="msg-content">
           {parts.map((raw, i) => {
@@ -706,7 +838,9 @@ export default function Chat() {
         : "در حال نوشتن پاسخ…"
       : `دستیار ${BRAND} آماده پاسخ است`;
 
-  const lastMessageId = messages.length ? messages[messages.length - 1].id : null;
+  const lastMessage = messages.length ? messages[messages.length - 1] : null;
+  const lastMessageId = lastMessage ? lastMessage.id : null;
+  const lastRole = lastMessage ? lastMessage.role : null;
 
   return (
     <div className="app-root">
@@ -743,22 +877,12 @@ export default function Chat() {
                 />
               ))}
 
-              {status === "submitted" && (
+              {status === "submitted" && lastRole !== "assistant" && (
                 <div className="msg msg-bot">
                   <div className="msg-avatar msg-avatar-bot" aria-hidden />
                   <div className="msg-body">
                     <div className="msg-role">{BRAND}</div>
-                    <div className="msg-content">
-                      <span
-                        className="thinking"
-                        role="status"
-                        aria-label="در حال نوشتن پاسخ"
-                      >
-                        <span />
-                        <span />
-                        <span />
-                      </span>
-                    </div>
+                    <ProgressMessage parts={[]} />
                   </div>
                 </div>
               )}
